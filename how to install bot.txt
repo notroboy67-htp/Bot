@@ -1,0 +1,51 @@
+# NRB VPS Discord Bot - Installation
+
+## 1. Install Docker
+Make sure Docker is installed and the Docker daemon is running.
+
+## 2. Install Python dependencies
+apt update
+apt install python3-pip -y
+mkdir -p ~/.config/pip
+echo -e "[global]\nbreak-system-packages = true" > ~/.config/pip/pip.conf
+pip install -r requirements.txt
+
+## 3. Configure the bot
+cp .env.example .env
+nano .env
+
+Set:
+- TOKEN = your Discord bot token
+- ADMIN_ID = your Discord user ID
+- Other VPS limits/settings as required
+
+## 4. Start the bot
+python3 bot.py
+
+## 5. Run as a systemd service
+sudo nano /etc/systemd/system/nrb-bot.service
+
+Use:
+
+[Unit]
+Description=NRB VPS Discord Bot
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+User=root
+WorkingDirectory=/root/NRB-VPS-Bot
+ExecStart=/usr/bin/python3 /root/NRB-VPS-Bot/bot.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
+
+Then:
+sudo systemctl daemon-reload
+sudo systemctl enable --now nrb-bot
+
+Check:
+sudo systemctl status nrb-bot
