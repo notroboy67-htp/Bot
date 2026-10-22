@@ -8,58 +8,51 @@ permissions:
 
 jobs:
   create-vps:
-    name: NRB VPS Setup
+    name: Create NRB Container
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Install packages
+      - name: Install requirements
         run: |
           sudo apt-get update
-          sudo apt-get install -y openssh-server curl wget htop
+          sudo apt-get install -y docker.io openssh-client curl
 
-      - name: Configure SSH username and password
-        env:
-          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
-          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+      - name: Create Ubuntu container
         run: |
           set -e
 
-          if [ -z "$VPS_USERNAME" ] || [ -z "$VPS_PASSWORD" ]; then
-            echo "Configure VPS_USERNAME and VPS_PASSWORD in GitHub Secrets."
-            exit 1
-          fi
+          # Generate login credentials automatically
+          VPS_USERNAME="nrbuser"
+          VPS_PASSWORD="$(openssl rand -hex 16)"
 
-          if ! [[ "$VPS_USERNAME" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
-            echo "Invalid username format."
-            exit 1
-          fi
+          # Start an Ubuntu container with SSH installed
+          sudo docker run -d \
+            --name nrb-vps \
+            ubuntu:24.04 \
+            sleep infinity
 
-          if ! id "$VPS_USERNAME" >/dev/null 2>&1; then
-            sudo useradd -m -s /bin/bash "$VPS_USERNAME"
-          fi
+          sudo docker exec nrb-vps bash -c \
+            "apt-get update && \
+             DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server sudo"
 
-          echo "$VPS_USERNAME:$VPS_PASSWORD" | sudo chpasswd
+          sudo docker exec nrb-vps bash -c \
+            "useradd -m -s /bin/bash '$VPS_USERNAME' && \
+             echo '$VPS_USERNAME:$VPS_PASSWORD' | chpasswd"
 
-          sudo mkdir -p /run/sshd
-          sudo ssh-keygen -A
+          sudo docker exec nrb-vps mkdir -p /run/sshd
+          sudo docker exec nrb-vps ssh-keygen -A
 
-          echo "PasswordAuthentication yes" | \
-            sudo tee /etc/ssh/sshd_config.d/99-nrb.conf
+          echo "=================================="
+          echo "          NRB VPS"
+          echo "=================================="
+          echo "Container: nrb-vps"
+          echo "Username: $VPS_USERNAME"
+          echo "Password: $VPS_PASSWORD"
+          echo "=================================="
 
-          sudo /usr/sbin/sshd
-
-          echo "SSH configured for username: $VPS_USERNAME"
-
-      - name: Display IPv4
+      - name: Display runner IPv4
         run: |
-          echo "Detected outbound IPv4:"
+          echo "Runner outbound IPv4:"
           curl -4 -fsS https://api.ipify.org
           echo
-
-      - name: Display system information
-        run: |
-          echo "=== NRB VPS ==="
-          hostname
-          uname -a
-          free -h
-          df -h /
+          echo "This is not a dedicated VPS public IP."
