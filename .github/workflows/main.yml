@@ -1,0 +1,47 @@
+name: NRB VPS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  create-vps:
+    name: Setup Ubuntu VPS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+
+    steps:
+      - name: Update Ubuntu
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            openssh-server \
+            curl \
+            wget \
+            tmux \
+            htop \
+            neofetch
+
+      - name: Display System Information
+        run: |
+          echo "================================"
+          echo "       NRB VPS"
+          echo "================================"
+          uname -a
+          free -h
+          df -h /
+
+      - name: Prepare SSH Service
+        run: |
+          sudo mkdir -p /run/sshd
+          sudo ssh-keygen -A
+          sudo /usr/sbin/sshd
+          echo "SSH service started."
+
+      - name: Finish Setup
+        run: |
+          echo "NRB VPS environment is ready."
+          echo "Note: This is a temporary GitHub runner."
+          echo "It does not automatically provide public SSH access."
