@@ -8,51 +8,70 @@ permissions:
 
 jobs:
   create-vps:
-    name: Create NRB Container
     runs-on: ubuntu-24.04
+    timeout-minutes: 350
 
     steps:
       - name: Install requirements
         run: |
+          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y docker.io openssh-client curl
+          sudo apt-get install -y docker.io curl openssl
+          sudo docker --version
+          sudo docker info
 
-      - name: Create Ubuntu container
+      - name: Create Ubuntu container and configure SSH
         run: |
-          set -e
+          set -euo pipefail
 
-          # Generate login credentials automatically
-          VPS_USERNAME="nrbuser"
-          VPS_PASSWORD="$(openssl rand -hex 16)"
+          USERNAME="nrbuser"
+          PASSWORD="$(openssl rand -hex 16)"
 
-          # Start an Ubuntu container with SSH installed
           sudo docker run -d \
             --name nrb-vps \
             ubuntu:24.04 \
             sleep infinity
 
-          sudo docker exec nrb-vps bash -c \
-            "apt-get update && \
-             DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server sudo"
+          sudo docker exec nrb-vps bash -lc '
+            set -e
+            apt-get update
+            DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server
+            mkdir -p /run/sshd
+            id nrbuser >/dev/null 2>&1 || \
+              useradd -m -s /bin/bash nrbuser
+          '
 
-          sudo docker exec nrb-vps bash -c \
-            "useradd -m -s /bin/bash '$VPS_USERNAME' && \
-             echo '$VPS_USERNAME:$VPS_PASSWORD' | chpasswd"
+          printf '%s:%s\n' "$USERNAME" "$PASSWORD" |
+            sudo docker exec -i nrb-vps chpasswd
 
-          sudo docker exec nrb-vps mkdir -p /run/sshd
           sudo docker exec nrb-vps ssh-keygen -A
 
-          echo "=================================="
-          echo "          NRB VPS"
-          echo "=================================="
-          echo "Container: nrb-vps"
-          echo "Username: $VPS_USERNAME"
-          echo "Password: $VPS_PASSWORD"
-          echo "=================================="
+          sudo docker exec nrb-vps bash -lc '
+            printf "\nPasswordAuthentication yes\n" \
+              >> /etc/ssh/sshd_config
+            printf "\nPermitRootLogin no\n" \
+              >> /etc/ssh/sshd_config
+            /usr/sbin/sshd
+            pgrep -x sshd
+          '
 
-      - name: Display runner IPv4
+          echo "===== NRB VPS DETAILS ====="
+          echo "Username: $USERNAME"
+          echo "Password: $PASSWORD"
+          echo "SSH port inside container: 22"
+          echo "==========================="
+
+      - name: Verify container and SSH
         run: |
+          set -euo pipefail
+          sudo docker ps --filter name=nrb-vps
+          sudo docker exec nrb-vps pgrep -x sshd
+          echo "Container and SSH service are running."
+
+      - name: Display runner outbound IPv4
+        run: |
+          set -euo pipefail
           echo "Runner outbound IPv4:"
-          curl -4 -fsS https://api.ipify.org
+          curl -4 -fsS --max-time 15 https://api.ipify.org
           echo
-          echo "This is not a dedicated VPS public IP."
+          echo "This IP is not guaranteed to accept incoming SSH connections."
