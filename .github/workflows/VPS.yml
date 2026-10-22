@@ -1,0 +1,65 @@
+name: NRB VPS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  create-vps:
+    name: NRB VPS Setup
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssh-server curl wget htop
+
+      - name: Configure SSH username and password
+        env:
+          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+        run: |
+          set -e
+
+          if [ -z "$VPS_USERNAME" ] || [ -z "$VPS_PASSWORD" ]; then
+            echo "Configure VPS_USERNAME and VPS_PASSWORD in GitHub Secrets."
+            exit 1
+          fi
+
+          if ! [[ "$VPS_USERNAME" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+            echo "Invalid username format."
+            exit 1
+          fi
+
+          if ! id "$VPS_USERNAME" >/dev/null 2>&1; then
+            sudo useradd -m -s /bin/bash "$VPS_USERNAME"
+          fi
+
+          echo "$VPS_USERNAME:$VPS_PASSWORD" | sudo chpasswd
+
+          sudo mkdir -p /run/sshd
+          sudo ssh-keygen -A
+
+          echo "PasswordAuthentication yes" | \
+            sudo tee /etc/ssh/sshd_config.d/99-nrb.conf
+
+          sudo /usr/sbin/sshd
+
+          echo "SSH configured for username: $VPS_USERNAME"
+
+      - name: Display IPv4
+        run: |
+          echo "Detected outbound IPv4:"
+          curl -4 -fsS https://api.ipify.org
+          echo
+
+      - name: Display system information
+        run: |
+          echo "=== NRB VPS ==="
+          hostname
+          uname -a
+          free -h
+          df -h /
