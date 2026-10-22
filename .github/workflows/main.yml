@@ -1,4 +1,4 @@
-name: NRB VPS
+name: NRB VPS with SSHX
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   create-vps:
-    name: Setup Ubuntu VPS
+    name: NRB VPS Setup
     runs-on: ubuntu-24.04
     timeout-minutes: 350
 
@@ -16,32 +16,18 @@ jobs:
       - name: Update Ubuntu
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            openssh-server \
-            curl \
-            wget \
-            tmux \
-            htop \
-            neofetch
+          sudo apt-get install -y curl wget tmux htop neofetch
 
       - name: Display System Information
         run: |
           echo "================================"
-          echo "       NRB VPS"
+          echo "          NRB VPS"
           echo "================================"
           uname -a
           free -h
           df -h /
 
-      - name: Prepare SSH Service
+      - name: Start SSHX Terminal
         run: |
-          sudo mkdir -p /run/sshd
-          sudo ssh-keygen -A
-          sudo /usr/sbin/sshd
-          echo "SSH service started."
-
-      - name: Finish Setup
-        run: |
-          echo "NRB VPS environment is ready."
-          echo "Note: This is a temporary GitHub runner."
-          echo "It does not automatically provide public SSH access."
+          set -e
+          curl -sSf https://sshx.io/get | sh -s run
